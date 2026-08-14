@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>多点直线选址总距离最小值探究</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", sans-serif;
+        }
+        body {
+            padding: 30px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #222;
+        }
+        .tab-btn-group {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .tab-btn-group button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            background: #94b8ff;
+            color: #000;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .tab-btn-group button.active {
+            background: #4285f4;
+            color: #fff;
+        }
+        .canvas-box {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        #lineCanvas {
+            width: 100%;
+            height: 180px;
+            cursor: crosshair;
+        }
+        .calc-info {
+            background: #f5f7fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        .formula {
+            font-size: 18px;
+            font-weight: bold;
+            color: #d93025;
+            margin: 8px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        table th {
+            background-color: #4285f4;
+            color: white;
+        }
+        .btn-group {
+            margin: 15px 0;
+        }
+        #resetBtn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            background: #4285f4;
+            color: white;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        #resetBtn:hover {
+            background: #3367d6;
+        }
+        .rule {
+            margin-top: 25px;
+            padding: 15px;
+            background: #e8f0fe;
+            border-radius: 6px;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+    <h2>直线多点选址总距离最短探究（4/5/6栋宿舍楼切换）</h2>
+
+    <div class="tab-btn-group">
+        <button class="model-btn active" data-num="4">4栋宿舍楼</button>
+        <button class="model-btn" data-num="5">5栋宿舍楼</button>
+        <button class="model-btn" data-num="6">6栋宿舍楼</button>
+    </div>
+
+    <div class="canvas-box">
+        <canvas id="lineCanvas"></canvas>
+    </div>
+
+    <div class="calc-info">
+        <div>本次距离求和算式（结果已四舍五入取整）：</div>
+        <div class="formula" id="formulaBox">暂无数据，请点击上方直线放置超市</div>
+        <div>多次点击记录对比：</div>
+    </div>
+
+    <div class="btn-group">
+        <button id="resetBtn">清空所有记录与超市点</button>
+    </div>
+
+    <table id="recordTable">
+        <thead>
+            <tr>
+                <th>序号</th>
+                <th>超市横坐标</th>
+                <th>完整求和算式</th>
+                <th>总距离（整数）</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="rule">
+        <strong>数学核心结论：</strong>
+        <p>1. <strong>偶数个点（4、6栋）</strong>：超市建在<strong>最中间两个点之间任意线段上</strong>，总距离最小；</p>
+        <p>2. <strong>奇数个点（5栋）</strong>：超市直接放在<strong>正中间那栋宿舍楼的点位</strong>，总距离唯一最小值；</p>
+        <p>3. 原理：首尾配对求和，外层两点距离固定，只需要压缩中间一组距离即可。</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('lineCanvas');
+        const ctx = canvas.getContext('2d');
+        const formulaBox = document.getElementById('formulaBox');
+        const recordTable = document.getElementById('recordTable').querySelector('tbody');
+        const resetBtn = document.getElementById('resetBtn');
+        const modelBtns = document.querySelectorAll('.model-btn');
+
+        // 三种楼栋配置
+        const buildingConfig = {
+            4: [
+                { x: 80, y: 90, label: 'A' },
+                { x: 220, y: 90, label: 'B' },
+                { x: 360, y: 90, label: 'C' },
+                { x: 500, y: 90, label: 'D' }
+            ],
+            5: [
+                { x: 80, y: 90, label: 'A' },
+                { x: 190, y: 90, label: 'B' },
+                { x: 300, y: 90, label: 'C' },
+                { x: 410, y: 90, label: 'D' },
+                { x: 520, y: 90, label: 'E' }
+            ],
+            6: [
+                { x: 70, y: 90, label: 'A' },
+                { x: 160, y: 90, label: 'B' },
+                { x: 250, y: 90, label: 'C' },
+                { x: 340, y: 90, label: 'D' },
+                { x: 430, y: 90, label: 'E' },
+                { x: 520, y: 90, label: 'F' }
+            ]
+        };
+
+        let currentNum = 4;
+        let buildings = buildingConfig[currentNum];
+        let marketPoint = null;
+        let recordCount = 0;
+
+        // 画布自适应
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            drawBaseLine();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // 绘制基线和楼栋
+        function drawBaseLine() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // 主水平线
+            ctx.beginPath();
+            ctx.moveTo(50, 90);
+            ctx.lineTo(canvas.width - 50, 90);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#333';
+            ctx.stroke();
+
+            // 绘制所有宿舍楼红点
+            buildings.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#d93025';
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.font = '16px Arial';
+                ctx.fillText(b.label, b.x - 5, b.y - 15);
+            })
+
+            if (marketPoint) {
+                drawMarketAndCalc();
+            }
+        }
+
+        // 绘制超市、虚线、计算（四舍五入取整）
+        function drawMarketAndCalc() {
+            const mx = marketPoint.x;
+            const my = marketPoint.y;
+
+            // 绘制蓝色超市圆点
+            ctx.beginPath();
+            ctx.arc(mx, my, 9, 0, Math.PI * 2);
+            ctx.fillStyle = '#4285f4';
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.font = '16px Arial';
+            ctx.fillText('超市', mx - 12, my - 15);
+
+            // 计算每段距离并四舍五入
+            let total = 0;
+            let disList = [];
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+
+            buildings.forEach(b => {
+                let dis = Math.abs(b.x - mx);
+                dis = Math.round(dis); // 核心：四舍五入为整数
+                total += dis;
+                disList.push(dis);
+                // 画虚线
+                ctx.beginPath();
+                ctx.moveTo(b.x, b.y);
+                ctx.lineTo(mx, my);
+                ctx.stroke();
+            })
+            ctx.setLineDash([]);
+            total = Math.round(total);
+
+            // 拼接算式字符串
+            const formulaStr = disList.join(' + ') + ` = ${total}`;
+            formulaBox.innerText = formulaStr;
+
+            // 写入表格记录
+            recordCount++;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${recordCount}</td>
+                <td>x=${Math.round(mx)}</td>
+                <td>${formulaStr}</td>
+                <td>${total}</td>
+            `;
+            recordTable.appendChild(tr);
+        }
+
+        // 画布点击放置超市
+        canvas.addEventListener('click', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            marketPoint = { x: x, y: 90 };
+            drawBaseLine();
+        })
+
+        // 重置按钮
+        resetBtn.addEventListener('click', function() {
+            marketPoint = null;
+            recordCount = 0;
+            formulaBox.innerText = '暂无数据，请点击上方直线放置超市';
+            recordTable.innerHTML = '';
+            drawBaseLine();
+        })
+
+        // 切换楼栋模型按钮
+        modelBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                modelBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentNum = Number(this.dataset.num);
+                buildings = buildingConfig[currentNum];
+                // 切换模型自动清空
+                marketPoint = null;
+                recordCount = 0;
+                formulaBox.innerText = '已切换模型，请重新点击直线放置超市';
+                recordTable.innerHTML = '';
+                drawBaseLine();
+            })
+        })
+
+        // 初始化
+        resizeCanvas();
+    </script>
+</body>
+</html>
