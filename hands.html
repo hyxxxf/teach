@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>多人两两握手规律演示（按人物固定线条颜色）</title>
+<style>
+*{
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Microsoft Yahei", sans-serif;
+}
+body{
+  max-width: 900px;
+  margin: 30px auto;
+  padding: 0 20px;
+}
+h2{
+  text-align: center;
+  margin-bottom: 20px;
+  color: #222;
+}
+.wrap{
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+}
+#canvas{
+  width: 100%;
+  height: 420px;
+  background-color: #f8f9fa;
+}
+.control{
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+button,select{
+  padding: 7px 16px;
+  font-size: 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+button{
+  background: #4285f4;
+  color: #fff;
+}
+button:hover{
+  background: #336fc9;
+}
+.count-info{
+  font-size: 16px;
+  font-weight: bold;
+}
+.rule-box{
+  margin-top: 25px;
+  padding: 18px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  line-height: 1.9;
+}
+</style>
+</head>
+<body>
+<h2>多人两两握手次数计算动画演示</h2>
+<div class="wrap">
+  <canvas id="canvas"></canvas>
+  <div class="control">
+    <select id="numSelect">
+      <option value="5">5人</option>
+      <option value="6">6人</option>
+      <option value="7">7人</option>
+      <option value="8">8人</option>
+    </select>
+    <button id="playBtn">开始演示握手</button>
+    <button id="resetBtn">重置清空</button>
+    <span class="count-info">已握手：<span id="count">0</span> 次</span>
+  </div>
+</div>
+
+<div class="rule-box">
+  <h3>握手问题通用规律总结</h3>
+  <p>原理：n个人，每人与(n-1)人握手，甲乙握手重复计算2次，需÷2</p>
+  <p><strong>通用公式：总次数 = n × (n − 1) ÷ 2</strong></p>
+  <p>5人：5×4÷2 = 10 次</p>
+  <p>6人：6×5÷2 = 15 次</p>
+  <p>7人：7×6÷2 = 21 次</p>
+  <p>8人：8×7÷2 = 28 次</p>
+  <p>配色说明：同一个人的所有握手线条使用同一种颜色，方便观察每个人握了几次</p>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const numSelect = document.getElementById('numSelect');
+const playBtn = document.getElementById('playBtn');
+const resetBtn = document.getElementById('resetBtn');
+const countDom = document.getElementById('count');
+
+// 每个人固定专属颜色
+const personColor = [
+  '#e53935',   //1号红
+  '#43a047',   //2号绿
+  '#1e88e5',   //3号蓝
+  '#8e24aa',   //4号紫
+  '#ff7f50',   //5号橙
+  '#00acc1',   //6号青
+  '#ff4081',   //7号玫红
+  '#795548'    //8号棕
+];
+
+let totalCount = 0;
+let timerArr = [];
+let peoplePoints = [];
+let allPairs = [];
+
+// 环形生成点位
+function createPoints(n){
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const r = 160;
+  const arr = [];
+  for(let i=0;i<n;i++){
+    const angle = 2 * Math.PI / n * i - Math.PI/2;
+    arr.push({
+      x: centerX + r * Math.cos(angle),
+      y: centerY + r * Math.sin(angle),
+      no: i+1,
+      color: personColor[i]
+    })
+  }
+  return arr;
+}
+
+// 生成不重复组合 i<j 避免重复
+function getPairs(n){
+  let res = [];
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      res.push([i,j]);
+    }
+  }
+  return res;
+}
+
+// 绘制底部人物圆圈
+function drawBase(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  peoplePoints.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 24, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '17px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.no, p.x, p.y);
+  })
+}
+
+// 全部重置
+function resetAll(){
+  timerArr.forEach(t=>clearTimeout(t));
+  timerArr = [];
+  totalCount = 0;
+  countDom.textContent = 0;
+  const n = parseInt(numSelect.value);
+  peoplePoints = createPoints(n);
+  allPairs = getPairs(n);
+  drawBase();
+}
+
+// 播放动画：用起始人的颜色画这条线
+function playAnim(){
+  resetAll();
+  let delay = 0;
+  allPairs.forEach((pair)=>{
+    const t = setTimeout(()=>{
+      const idx1 = pair[0];
+      const p1 = peoplePoints[idx1];
+      const p2 = peoplePoints[pair[1]];
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = p1.color; // 取第一个人的颜色作为线条颜色
+      ctx.stroke();
+      totalCount++;
+      countDom.textContent = totalCount;
+    }, delay);
+    timerArr.push(t);
+    delay += 450;
+  })
+}
+
+// 自适应窗口
+function resizeCanvas(){
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  resetAll();
+}
+
+window.addEventListener('resize', resizeCanvas);
+numSelect.addEventListener('change', resetAll);
+playBtn.addEventListener('click', playAnim);
+resetBtn.addEventListener('click', resetAll);
+
+resizeCanvas();
+</script>
+</body>
+</html>
